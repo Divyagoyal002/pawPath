@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+data/synthetic/
+data/real/
+*.joblib
+*.pt
+dashboard/session_log.csv
+.DS_Store

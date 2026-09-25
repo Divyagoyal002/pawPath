@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PawPath — Canine Gait Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --border:         rgba(11,11,11,0.10);
+    --series-1:       #2a78d6; /* blue  - ax */
+    --series-2:       #eb6834; /* orange - ay */
+    --series-3:       #1baf7a; /* aqua  - az */
+    --good:           #0ca30c;
+    --critical:       #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page:           #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --border:         rgba(255,255,255,0.10);
+      --series-1:       #3987e5;
+      --series-2:       #d95926;
+      --series-3:       #199e70;
+      --good:           #0ca30c;
+      --critical:       #e66767;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .subtitle { color: var(--text-secondary); margin: 0 0 24px; font-size: 0.95rem; }
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  label { display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 6px; }
+  input[type=text], select, input[type=file] {
+    width: 100%;
+    padding: 9px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--page);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    margin-bottom: 14px;
+  }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 220px; }
+  button {
+    background: var(--series-1);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+  button:hover { opacity: 0.92; }
+  .error-banner {
+    background: var(--surface-1);
+    border: 1px solid var(--critical);
+    color: var(--critical);
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 0.9rem;
+  }
+  .stat-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+  .stat-tile {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    flex: 1;
+    min-width: 160px;
+  }
+  .stat-label { font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 6px; }
+  .stat-value { font-size: 1.6rem; font-weight: 600; }
+  .stat-value.good { color: var(--good); }
+  .stat-value.critical { color: var(--critical); }
+  .alert {
+    padding: 14px 16px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 0.95rem;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .alert.critical { color: var(--critical); border-color: var(--critical); }
+  .alert.good { color: var(--good); border-color: var(--good); }
+  .chart-title { font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 10px; }
+  canvas { max-height: 260px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--gridline); color: var(--text-secondary); }
+  th { color: var(--text-muted); font-weight: 500; }
+  .caption { font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; }
+  a.download-btn {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 9px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    text-decoration: none;
+    font-size: 0.9rem;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🐾 PawPath — Canine Gait Dashboard</h1>
+  <p class="subtitle">Non-invasive IMU-based screening for early spinal injury, lameness and arthritis indicators.</p>
+
+  {% if error %}
+  <div class="error-banner">{{ error }}</div>
+  {% endif %}
+
+  <form class="card" method="post" action="/analyze" enctype="multipart/form-data">
+    <div class="row">
+      <div>
+        <label for="dog_id">Dog ID</label>
+        <input type="text" id="dog_id" name="dog_id" value="{{ result.dog_id if result else 'demo_dog_01' }}" required>
+      </div>
+      <div>
+        <label for="sample">Synthetic sample session</label>
+        <select id="sample" name="sample">
+          <option value="">— none —</option>
+          {% for s in samples %}
+          <option value="{{ s }}">{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <label for="file">…or upload a session CSV (millis,ax_g,ay_g,az_g,gx_dps,gy_dps,gz_dps)</label>
+    <input type="file" id="file" name="file" accept=".csv">
+    <button type="submit">Analyze session</button>
+  </form>
+
+  {% if result %}
+  <div class="stat-row">
+    <div class="stat-tile">
+      <div class="stat-label">Classification</div>
+      <div class="stat-value {{ 'critical' if result.is_abnormal else 'good' }}">{{ result.classification.capitalize() }}</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">Symmetry index</div>
+      <div class="stat-value">{{ result.symmetry }}</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">Windows analyzed</div>
+      <div class="stat-value">{{ result.windows_analyzed }}</div>
+    </div>
+  </div>
+
+  {% if result.is_abnormal %}
+  <div class="alert critical">⚠ Abnormal gait pattern detected ({{ result.classification }}). Recommend veterinary follow-up.</div>
+  {% else %}
+  <div class="alert good">✓ No abnormal gait pattern detected in this session.</div>
+  {% endif %}
+  {% if not result.used_model %}
+  <p class="caption">⚠ No trained model found on the server — this used the heuristic fallback. Train one with <code>ml/classical/train_rf.py</code> and commit <code>ml/classical/rf_model.joblib</code>.</p>
+  {% endif %}
+
+  <div class="card">
+    <div class="chart-title">Raw accelerometer (g)</div>
+    <canvas id="rawChart"></canvas>
+  </div>
+  <div class="card">
+    <div class="chart-title">Preprocessed (gravity-removed, denoised)</div>
+    <canvas id="preprocessedChart"></canvas>
+  </div>
+
+  {% if result.chart_data.trend_values|length > 1 %}
+  <div class="card">
+    <div class="chart-title">Symmetry index trend — {{ result.dog_id }}</div>
+    <canvas id="trendChart"></canvas>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <div class="chart-title">Session log — {{ result.dog_id }}</div>
+    <table>
+      <thead><tr><th>Timestamp (UTC)</th><th>Prediction</th><th>Symmetry</th></tr></thead>
+      <tbody>
+        {% for row in result.log_rows %}
+        <tr><td>{{ row.timestamp }}</td><td>{{ row.prediction }}</td><td>{{ row.symmetry_index }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <a class="download-btn" href="/report/{{ result.dog_id }}" download>Download vet report (CSV)</a>
+  </div>
+
+  <script>
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const palette = isDark
+      ? { s1: '#3987e5', s2: '#d95926', s3: '#199e70', grid: '#2c2c2a', text: '#c3c2b7' }
+      : { s1: '#2a78d6', s2: '#eb6834', s3: '#1baf7a', grid: '#e1e0d9', text: '#52514e' };
+
+    const chartData = {{ result.chart_data | tojson }};
+
+    function lineChart(canvasId, series, labelCount) {
+      const ctx = document.getElementById(canvasId);
+      if (!ctx) return;
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: Array.from({length: labelCount}, (_, i) => i),
+          datasets: [
+            { label: 'ax', data: series.ax, borderColor: palette.s1, backgroundColor: palette.s1, borderWidth: 2, pointRadius: 0, tension: 0.15 },
+            { label: 'ay', data: series.ay, borderColor: palette.s2, backgroundColor: palette.s2, borderWidth: 2, pointRadius: 0, tension: 0.15 },
+            { label: 'az', data: series.az, borderColor: palette.s3, backgroundColor: palette.s3, borderWidth: 2, pointRadius: 0, tension: 0.15 },
+          ],
+        },
+        options: {
+          responsive: true,
+          interaction: { mode: 'index', intersect: false },
+          plugins: { legend: { labels: { color: palette.text } }, tooltip: { enabled: true } },
+          scales: {
+            x: { ticks: { color: palette.text, display: false }, grid: { color: palette.grid } },
+            y: { ticks: { color: palette.text }, grid: { color: palette.grid } },
+          },
+        },
+      });
+    }
+
+    lineChart('rawChart', chartData.raw, chartData.raw.ax.length);
+    lineChart('preprocessedChart', chartData.preprocessed, chartData.preprocessed.ax.length);
+
+    const trendCanvas = document.getElementById('trendChart');
+    if (trendCanvas) {
+      new Chart(trendCanvas, {
+        type: 'line',
+        data: {
+          labels: chartData.trend_labels,
+          datasets: [{ label: 'Symmetry index', data: chartData.trend_values, borderColor: palette.s1, backgroundColor: palette.s1, borderWidth: 2, pointRadius: 3, tension: 0.15 }],
+        },
+        options: {
+          responsive: true,
+          interaction: { mode: 'index', intersect: false },
+          plugins: { legend: { display: false }, tooltip: { enabled: true } },
+          scales: {
+            x: { ticks: { color: palette.text, maxRotation: 0, autoSkip: true } , grid: { color: palette.grid } },
+            y: { ticks: { color: palette.text }, grid: { color: palette.grid }, suggestedMin: 0, suggestedMax: 1 },
+          },
+        },
+      });
+    }
+  </script>
+  {% endif %}
+</div>
+</body>
+</html>

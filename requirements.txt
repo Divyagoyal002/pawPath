@@ -1,7 +1,13 @@
+# Full local dev environment: data generation, both ML tracks, and the
+# dashboard. For the deployed dashboard only (no torch), see
+# api/requirements.txt.
 numpy
 scipy
 pandas
 scikit-learn
 torch
 joblib
-streamlit
+fastapi
+uvicorn
+jinja2
+python-multipart

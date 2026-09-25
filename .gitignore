@@ -4,7 +4,7 @@ __pycache__/
 venv/
 data/synthetic/
 data/real/
-*.joblib
-*.pt
-dashboard/session_log.csv
+ml/deep_learning/*.pt
+api/session_log.csv
+.vercel
 .DS_Store
